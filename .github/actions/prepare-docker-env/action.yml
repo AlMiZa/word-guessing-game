@@ -44,4 +44,4 @@ runs:
 
     - name: Set IMAGE_REPOSITORY variable
       shell: bash
-      run: echo "IMAGE_REPOSITORY=${{ inputs.registry }}/${{ github.repository }}" >> $GITHUB_ENV
+      run: echo "IMAGE_REPOSITORY=${{ inputs.registry }}/${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
