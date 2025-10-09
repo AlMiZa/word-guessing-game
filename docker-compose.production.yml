@@ -10,7 +10,7 @@ services:
     volumes:
       - nginx-certs:/etc/nginx/ssl
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--no-check-certificate", "--spider", "https://0.0.0.0/health"]
       interval: 30s
       timeout: 3s
       retries: 3
