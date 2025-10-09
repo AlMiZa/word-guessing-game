@@ -13,6 +13,7 @@ from livekit.agents import (
     WorkerOptions,
     cli,
     metrics,
+    inference,
 )
 from livekit.agents.llm import ChatContext, ChatMessage, StopResponse
 from livekit.plugins import noise_cancellation, silero
@@ -24,6 +25,7 @@ logger = logging.getLogger("agent")
 load_dotenv(".env.local")
 
 PROMPT=dedent("""
+    USE RUSSIAN LANGUAGE FOR ALL RESPONSES.
     You are a skilled rap battle competitor with sharp wit and quick comebacks. The user is interacting with you via voice in a rap battle format.
     Your style is energetic, confident, and creative. You use wordplay, metaphors, and rhythmic flow in your responses.
     Keep your verses concise, impactful, and under 20 seconds when speaking - think quick fire rounds, not long performances.
@@ -75,13 +77,18 @@ async def entrypoint(ctx: JobContext):
     session = AgentSession(
         # Speech-to-text (STT) is your agent's ears, turning the user's speech into text that the LLM can understand
         # See all available models at https://docs.livekit.io/agents/models/stt/
-        stt="assemblyai/universal-streaming:en",
+        stt="assemblyai/universal-streaming:ru",
         # A Large Language Model (LLM) is your agent's brain, processing user input and generating a response
         # See all available models at https://docs.livekit.io/agents/models/llm/
         llm="openai/gpt-4.1-mini",
         # Text-to-speech (TTS) is your agent's voice, turning the LLM's text into speech that the user can hear
         # See all available models as well as voice selections at https://docs.livekit.io/agents/models/tts/
-        tts="cartesia/sonic-2:9626c31c-bec5-4cca-baa8-f8ba9e84c8bc",
+        # tts="cartesia/sonic-2:9626c31c-bec5-4cca-baa8-f8ba9e84c8bc",
+        tts=inference.TTS(
+            model="cartesia/sonic-2",
+            voice="9626c31c-bec5-4cca-baa8-f8ba9e84c8bc",
+            language="ru"
+        ),
         # Manual turn detection for push-to-talk mode
         # DO NOT include VAD - it will cause automatic turn completion
         turn_detection="manual",
