@@ -56,6 +56,7 @@ runs:
           docker compose \
           -f docker-compose.yml \
           -f docker-compose.${{ inputs.env }}.yml \
+          -f docker-compose.cache.yml \
           config > docker-compose.final.yml
 
     - name: Set up Docker Buildx

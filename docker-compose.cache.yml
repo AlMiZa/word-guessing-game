@@ -1,0 +1,14 @@
+services:
+  web:
+    build:
+      cache_from:
+        - type=registry,ref=${IMAGE_REPOSITORY}/web:${DOCKER_CACHE:-latest}-cache
+      cache_to:
+        - type=registry,mode=max,ref=${IMAGE_REPOSITORY}/web:${DOCKER_CACHE:-latest}-cache
+
+  agent:
+    build:
+      cache_from:
+        - type=registry,ref=${IMAGE_REPOSITORY}/agent:${DOCKER_CACHE:-latest}-cache
+      cache_to:
+        - type=registry,mode=max,ref=${IMAGE_REPOSITORY}/agent:${DOCKER_CACHE:-latest}-cache
