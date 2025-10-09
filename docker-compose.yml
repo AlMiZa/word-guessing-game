@@ -1,0 +1,28 @@
+services:
+  web:
+    build:
+      context: ./services/web
+      dockerfile: Dockerfile
+      target: development
+    ports:
+      - 3000:3000
+    volumes:
+      - ./services/web:/app
+      - /app/node_modules
+      - /app/.next
+    env_file:
+      - .env
+    restart: unless-stopped
+
+  agent:
+    build:
+      context: ./services/agent
+      dockerfile: Dockerfile
+      target: development
+    volumes:
+      - ./services/agent:/app
+      - /app/.venv
+      - /root/.cache
+    env_file:
+      - .env
+    restart: unless-stopped
