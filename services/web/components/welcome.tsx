@@ -34,12 +34,16 @@ export const Welcome = ({
         />
       </svg>
 
-      <p className="text-fg1 max-w-prose pt-1 leading-6 font-medium">
+      <h1 className="mb-4 text-4xl font-bold">
+        Welcome to <br /> AI Rap Battle!
+      </h1>
+
+      <p className="text-fg1 p2-1 font-large max-w-prose leading-12">
         Step up to the mic and battle your AI opponent
       </p>
 
       <div className="mt-6 flex flex-col gap-3">
-        <Button variant="destructive" size="lg" onClick={onStartBattle} className="w-64 font-mono">
+        <Button variant="destructive" size="xl" onClick={onStartBattle} className="w-64 font-mono">
           START BATTLE
         </Button>
       </div>

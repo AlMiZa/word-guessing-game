@@ -15,6 +15,7 @@ export function BattleControlBar({ className, ...props }: React.HTMLAttributes<H
   const [instructions, setInstructions] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [wordCount, setWordCount] = useState(0);
+  const [battleStarted, setBattleStarted] = useState(false);
 
   const handleInstructionsChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const text = e.target.value;
@@ -49,6 +50,9 @@ export function BattleControlBar({ className, ...props }: React.HTMLAttributes<H
         method: 'attack',
         payload: instructions,
       });
+
+      // Hide attack and protect buttons after attacking
+      setBattleStarted(true);
     } catch (error) {
       console.error('Failed to attack:', error);
     } finally {
@@ -75,6 +79,12 @@ export function BattleControlBar({ className, ...props }: React.HTMLAttributes<H
         method: 'protect',
         payload: instructions,
       });
+
+      // Enable the microphone so the user can speak their attack
+      await room.localParticipant.setMicrophoneEnabled(true);
+
+      // Hide attack and protect buttons after protecting
+      setBattleStarted(true);
     } catch (error) {
       console.error('Failed to protect:', error);
     } finally {
@@ -106,51 +116,57 @@ export function BattleControlBar({ className, ...props }: React.HTMLAttributes<H
       {...props}
     >
       {/* Instructions Input */}
-      <div className="flex flex-col gap-2">
-        <label htmlFor="instructions" className="text-fg1 text-sm font-medium">
-          Battle Instructions (max 20 words)
-        </label>
-        <input
-          id="instructions"
-          type="text"
-          value={instructions}
-          onChange={handleInstructionsChange}
-          placeholder="Enter your battle instructions..."
-          className="border-bg2 dark:border-separator1 bg-background focus:ring-primary w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-none"
-        />
-        <p className="text-fg2 text-right text-xs">{wordCount} / 20 words</p>
-      </div>
+      {!battleStarted && (
+        <div className="flex flex-col gap-2">
+          <label htmlFor="instructions" className="text-fg1 text-sm font-medium">
+            Battle Instructions (max 20 words)
+          </label>
+          <input
+            id="instructions"
+            type="text"
+            value={instructions}
+            onChange={handleInstructionsChange}
+            placeholder="Enter your battle instructions..."
+            className="border-bg2 dark:border-separator1 bg-background focus:ring-primary w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-none"
+          />
+          <p className="text-fg2 text-right text-xs">{wordCount} / 20 words</p>
+        </div>
+      )}
 
       {/* Battle Buttons */}
       <div className="flex flex-col justify-center gap-2 md:flex-row">
-        <Button
-          variant="default"
-          size="lg"
-          onClick={handleAttack}
-          disabled={isLoading || !instructions.trim()}
-          className="flex-1 font-mono"
-        >
-          <SwordIcon weight="bold" className="mr-2" />
-          ATTACK
-        </Button>
+        {!battleStarted && (
+          <>
+            <Button
+              variant="default"
+              size="xl"
+              onClick={handleAttack}
+              disabled={isLoading || !instructions.trim()}
+              className="flex-1 font-mono md:h-10"
+            >
+              <SwordIcon weight="bold" className="mr-2" />
+              ATTACK
+            </Button>
 
-        <Button
-          variant="secondary"
-          size="lg"
-          onClick={handleProtect}
-          disabled={isLoading || !instructions.trim()}
-          className="flex-1 font-mono"
-        >
-          <ShieldIcon weight="bold" className="mr-2" />
-          PROTECT
-        </Button>
+            <Button
+              variant="secondary"
+              size="xl"
+              onClick={handleProtect}
+              disabled={isLoading || !instructions.trim()}
+              className="flex-1 font-mono md:h-10"
+            >
+              <ShieldIcon weight="bold" className="mr-2" />
+              PROTECT
+            </Button>
+          </>
+        )}
 
         <Button
           variant="destructive"
-          size="lg"
+          size="xl"
           onClick={handleInterrupt}
           disabled={isLoading}
-          className="flex-1 font-mono"
+          className={cn('font-mono md:h-10', !battleStarted && 'flex-1')}
         >
           <StopCircleIcon weight="bold" className="mr-2" />
           SHUTDOWN

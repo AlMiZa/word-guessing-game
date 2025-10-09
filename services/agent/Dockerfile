@@ -37,6 +37,8 @@ FROM base AS development
 # Use entrypoint to download models at runtime, then start with hot reload
 CMD ["uv", "run", "--frozen", "python", "-m", "watchdog.watchmedo", "auto-restart", "--directory", "/app", "--patterns=*.py;*.yaml", "--recursive", "--no-restart-on-command-exit", "--debounce-interval", "0.2", "--", "python3", "src/agent.py", "start"]
 
+COPY pyproject.toml uv.lock ./
+
 RUN uv sync --frozen --no-install-project --all-groups
 
 # Production stage

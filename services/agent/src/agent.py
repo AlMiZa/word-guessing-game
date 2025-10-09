@@ -36,13 +36,26 @@ PROMPT=dedent("""
 
 
 class Assistant(Agent):
-    def __init__(self, custom_instructions: str = "") -> None:
+    def __init__(self, custom_instructions: str = "", protect_instructions: str = "") -> None:
         # Use custom instructions if provided, otherwise use default prompt
         instructions = custom_instructions if custom_instructions else PROMPT
         super().__init__(instructions=instructions)
+        self.protect_instructions = protect_instructions
 
     async def on_user_turn_completed(self, turn_ctx: ChatContext, new_message: ChatMessage) -> None:
         # callback before generating a reply after user turn committed
+        # If we have protect instructions, prepend them to the user's message
+        if self.protect_instructions:
+            logger.info(f"Applying protect instructions: {self.protect_instructions}")
+            # Modify the user message to include defensive strategy
+            original_text = new_message.text_content or ""
+            enhanced_text = f"[Defensive Strategy: {self.protect_instructions}] User said: {original_text}"
+            # Update the message content
+            new_message.content = enhanced_text
+            logger.info(f"Enhanced user message with protect instructions")
+            # Clear the protect instructions after use
+            self.protect_instructions = ""
+
         if not new_message.text_content:
             # for example, raise StopResponse to stop the agent from generating a reply
             logger.info("ignore empty user turn")
@@ -50,7 +63,6 @@ class Assistant(Agent):
 
 def prewarm(proc: JobProcess):
     proc.userdata["vad"] = silero.VAD.load()
-
 
 async def entrypoint(ctx: JobContext):
     # Logging setup
@@ -73,9 +85,6 @@ async def entrypoint(ctx: JobContext):
         # Manual turn detection for push-to-talk mode
         # DO NOT include VAD - it will cause automatic turn completion
         turn_detection="manual",
-        # Set extremely high min_endpointing_delay to prevent automatic turn completion on pauses
-        # This ensures the agent ONLY responds when we explicitly call commit_user_turn()
-        min_endpointing_delay=999999.0,  # Effectively disable automatic EOU detection
     )
 
     # Set up RoomIO for managing participant audio
@@ -97,29 +106,21 @@ async def entrypoint(ctx: JobContext):
 
     ctx.add_shutdown_callback(log_usage)
 
+    # Create the assistant instance so we can modify it later
+    assistant = Assistant()
+
     # Start the session
-    await session.start(agent=Assistant())
+    await session.start(agent=assistant)
 
     # Disable input audio at the start (push-to-talk mode)
     session.input.set_audio_enabled(False)
 
-    # Register RPC methods for listen/reply control
-    @ctx.room.local_participant.register_rpc_method("start_listening")
-    async def start_listening(data: rtc.RpcInvocationData):
-        logger.info(f"start_listening called by {data.caller_identity}")
-        # Clear any previous turn and start fresh
-        session.interrupt()
-        session.clear_user_turn()
-        # listen to the caller if multi-user
-        room_io.set_participant(data.caller_identity)
-        session.input.set_audio_enabled(True)
+    # Store VAD instance for protect mode
+    vad = None
 
     @ctx.room.local_participant.register_rpc_method("attack")
     async def attack(data: rtc.RpcInvocationData):
         logger.info(f"attack called by {data.caller_identity} with instructions: {data.payload}")
-        # Clear any previous turn and interrupt
-        session.interrupt()
-        session.clear_user_turn()
 
         # Get custom instructions if provided
         instructions = data.payload or ""
@@ -133,45 +134,32 @@ async def entrypoint(ctx: JobContext):
 
     @ctx.room.local_participant.register_rpc_method("protect")
     async def protect(data: rtc.RpcInvocationData):
+        nonlocal vad
         logger.info(f"protect called by {data.caller_identity} with instructions: {data.payload}")
-        # Clear any previous turn and interrupt
-        session.interrupt()
-        session.clear_user_turn()
 
         # Get custom instructions if provided
         instructions = data.payload or ""
 
-        # Inject instructions as a silent message to guide the agent's defense strategy
+        # Store the protect instructions in the assistant to be used when the turn is completed
         if instructions:
-            # Generate a silent instruction that sets up the defense strategy
-            session.generate_reply(user_input=f"Prepare to defend yourself. Your strategy: {instructions}. Now listen to your opponent.")
+            assistant.protect_instructions = instructions
+            logger.info(f"Stored protect instructions: {instructions}")
+
+        # Switch to automatic turn detection with VAD for protect mode
+        # This allows the agent to automatically respond after 5 seconds of silence
+        if vad is None:
+            vad = ctx.proc.userdata["vad"]
+
+        # Update the session to use VAD with 5-second silence threshold
+        session.input.turn_detector = vad
+        # Set min_endpointing_delay to 3 seconds (3000ms)
+        session.input.min_endpointing_delay = 3.0
 
         # Start listening for the attacker
         room_io.set_participant(data.caller_identity)
         session.input.set_audio_enabled(True)
 
-    @ctx.room.local_participant.register_rpc_method("stop_listening")
-    async def stop_listening(data: rtc.RpcInvocationData):
-        logger.info(f"stop_listening called by {data.caller_identity}")
-        # DON'T disable audio here - we need the STT stream to remain open
-        # so that commit_user_turn() can flush the buffer later
-        # Just stop capturing new audio by doing nothing - the high min_endpointing_delay
-        # prevents automatic turn completion
-        pass
-
-    @ctx.room.local_participant.register_rpc_method("reply")
-    async def reply(data: rtc.RpcInvocationData):
-        logger.info(f"reply called by {data.caller_identity}")
-        # Disable audio (in case it's still enabled) and commit the turn
-        session.input.set_audio_enabled(False)
-        # Commit the user turn and generate a response
-        session.commit_user_turn(
-            # the timeout for the final transcript to be received after committing the user turn
-            # increase this value if the STT is slow to respond
-            transcript_timeout=10.0,
-            # the duration of the silence to be appended to the STT to make it generate the final transcript
-            stt_flush_duration=2.0,
-        )
+        logger.info("Protect mode: VAD enabled with 3-second silence threshold")
 
     # Join the room and connect to the user
     await ctx.connect()
