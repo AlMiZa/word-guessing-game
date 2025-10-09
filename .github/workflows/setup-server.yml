@@ -1,0 +1,102 @@
+name: Setup Server
+
+on:
+  workflow_dispatch:
+
+jobs:
+  setup-server:
+    runs-on: ubuntu-latest
+    name: Setup Server
+    steps:
+      - name: Setup Server via SSH
+        env:
+          SERVER_IP: ${{ secrets.SERVER_IP }}
+          SERVER_PASSWORD: ${{ secrets.SERVER_PASSWORD }}
+          SERVER_USER: root
+          REGISTRY: ghcr.io
+          REGISTRY_USERNAME: ${{ github.actor }}
+          REGISTRY_PASSWORD: ${{ secrets.CR_PAT }}
+        run: |
+          # Install sshpass for password-based SSH
+          sudo apt-get update
+          sudo apt-get install -y sshpass
+
+          # Create the setup script
+          cat > setup_script.sh << 'SCRIPT_EOF'
+          #!/bin/bash
+          set -e
+
+          echo "Starting server setup..."
+
+          # Update system
+          sudo apt-get update
+
+          # Install docker
+          echo "Removing old Docker packages..."
+          for pkg in docker.io docker-doc docker-compose docker-compose-v2 podman-docker containerd runc; do
+            sudo apt-get remove -y $pkg || true
+          done
+
+          echo "Installing Docker prerequisites..."
+          sudo apt-get install -y ca-certificates curl
+          sudo install -m 0755 -d /etc/apt/keyrings
+          sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+          sudo chmod a+r /etc/apt/keyrings/docker.asc
+
+          echo "Adding Docker repository..."
+          echo \
+            "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+            $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}") stable" | \
+            sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+          sudo apt-get update
+
+          echo "Installing Docker..."
+          sudo apt-get install --yes docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+          # Install figlet
+          echo "Installing figlet..."
+          sudo apt-get install --yes figlet
+
+          # Add Swap
+          echo "Setting up swap space..."
+          if [ ! -f /swapfile ]; then
+            sudo fallocate -l 2G /swapfile
+            sudo chmod 600 /swapfile
+            sudo mkswap /swapfile
+            sudo swapon /swapfile
+            echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+          else
+            echo "Swap file already exists, skipping..."
+          fi
+
+          # Login to docker registry
+          echo "Logging into Docker registry..."
+          echo "${REGISTRY_PASSWORD}" | docker login ${REGISTRY} -u ${REGISTRY_USERNAME} --password-stdin
+
+          # Initialize docker swarm
+          echo "Initializing Docker swarm..."
+          if ! docker info | grep -q "Swarm: active"; then
+            docker swarm init
+          else
+            echo "Docker swarm already initialized, skipping..."
+          fi
+
+          # Create folder for project
+          echo "Creating project directory..."
+          mkdir -p /root/app
+
+          echo "Server setup completed successfully!"
+          SCRIPT_EOF
+
+          # Copy and execute the script on the remote server
+          echo "Connecting to server ${SERVER_IP}..."
+          sshpass -p "${SERVER_PASSWORD}" scp -o StrictHostKeyChecking=no setup_script.sh ${SERVER_USER}@${SERVER_IP}:/tmp/setup_script.sh
+
+          echo "Executing setup script on remote server..."
+          sshpass -p "${SERVER_PASSWORD}" ssh -o StrictHostKeyChecking=no ${SERVER_USER}@${SERVER_IP} \
+            "export REGISTRY='${REGISTRY}' && export REGISTRY_USERNAME='${REGISTRY_USERNAME}' && export REGISTRY_PASSWORD='${REGISTRY_PASSWORD}' && bash /tmp/setup_script.sh"
+
+          echo "Cleaning up..."
+          sshpass -p "${SERVER_PASSWORD}" ssh -o StrictHostKeyChecking=no ${SERVER_USER}@${SERVER_IP} "rm /tmp/setup_script.sh"
+
+          echo "Setup completed successfully!"
