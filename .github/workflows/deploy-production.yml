@@ -22,6 +22,9 @@ jobs:
           - name: "web"
             services: |
               web
+          - name: "nginx"
+            services: |
+              nginx
     env:
       ENV: production
 

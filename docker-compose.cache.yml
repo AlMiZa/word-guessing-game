@@ -1,4 +1,11 @@
 services:
+  nginx:
+    build:
+      cache_from:
+        - type=registry,ref=${IMAGE_REPOSITORY}/nginx:${DOCKER_CACHE:-latest}-cache
+      cache_to:
+        - type=registry,mode=max,ref=${IMAGE_REPOSITORY}/nginx:${DOCKER_CACHE:-latest}-cache
+
   web:
     build:
       cache_from:
