@@ -1,10 +1,27 @@
 services:
+  nginx:
+    image: ${IMAGE_REPOSITORY}/nginx:${DOCKER_TAG:-latest}
+    build:
+      context: ./services/nginx
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - web
+    volumes:
+      - nginx-certs:/etc/nginx/ssl
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
   web:
     image: ${IMAGE_REPOSITORY}/web:${DOCKER_TAG:-latest}
     build:
       target: production
-    ports:
-      - 80:3000
     environment:
       LIVEKIT_URL: ${LIVEKIT_URL}
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY}
@@ -18,3 +35,9 @@ services:
       LIVEKIT_URL: ${LIVEKIT_URL}
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY}
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET}
+    volumes:
+      - agent-cache:/root/.cache
+
+volumes:
+  nginx-certs:
+  agent-cache:

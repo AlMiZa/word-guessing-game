@@ -1,6 +1,6 @@
 # Base stage with dependencies
 FROM node:22-alpine AS base
-RUN apk add --no-cache libc6-compat
+RUN apk add --no-cache libc6-compat curl
 
 # Install pnpm
 RUN corepack enable && corepack prepare pnpm@9.15.9 --activate

@@ -3,6 +3,11 @@ services:
     build:
       context: ./services/web
       dockerfile: Dockerfile
+    healthcheck:
+      test: "curl http://localhost:3000/ || exit 1"
+      interval: 5s
+      timeout: 10s
+      retries: 25
 
   agent:
     build:
