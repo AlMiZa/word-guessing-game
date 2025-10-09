@@ -173,12 +173,6 @@ async def entrypoint(ctx: JobContext):
             stt_flush_duration=2.0,
         )
 
-    @ctx.room.local_participant.register_rpc_method("cancel")
-    async def cancel(data: rtc.RpcInvocationData):
-        logger.info(f"cancel called by {data.caller_identity}")
-        session.input.set_audio_enabled(False)
-        session.clear_user_turn()
-
     # Join the room and connect to the user
     await ctx.connect()
 
@@ -189,7 +183,6 @@ async def handle_request(request: JobRequest) -> None:
         # this attribute communicates to frontend that we support PTT
         attributes={"push-to-talk": "1"},
     )
-
 
 if __name__ == "__main__":
     cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint, request_fnc=handle_request, prewarm_fnc=prewarm))

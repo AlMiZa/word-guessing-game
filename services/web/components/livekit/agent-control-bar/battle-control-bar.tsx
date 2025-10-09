@@ -87,20 +87,8 @@ export function BattleControlBar({ className, ...props }: React.HTMLAttributes<H
 
     setIsLoading(true);
     try {
-      // Find the agent participant
-      const agent = Array.from(room.remoteParticipants.values()).find((p) => p.isAgent);
-
-      if (!agent) {
-        console.error('No agent found in the room');
-        return;
-      }
-
-      // Call the cancel RPC method to stop everything
-      await room.localParticipant.performRpc({
-        destinationIdentity: agent.identity,
-        method: 'cancel',
-        payload: '',
-      });
+      // Disconnect from the room to completely shut down the session
+      await room.disconnect();
     } catch (error) {
       console.error('Failed to interrupt:', error);
     } finally {
@@ -165,7 +153,7 @@ export function BattleControlBar({ className, ...props }: React.HTMLAttributes<H
           className="flex-1 font-mono"
         >
           <StopCircleIcon weight="bold" className="mr-2" />
-          INTERRUPT
+          SHUTDOWN
         </Button>
       </div>
     </div>
