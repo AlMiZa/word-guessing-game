@@ -57,10 +57,14 @@ RUN adduser \
 # Copy source code
 COPY . .
 
-# Make entrypoint executable and change ownership to non-privileged user
-RUN chmod +x /app/entrypoint.sh && \
+# Create cache directory and set permissions
+RUN mkdir -p /app/.cache/uv && \
+    chmod +x /app/entrypoint.sh && \
     chown -R user:user /app
 
 USER user
+
+# Set UV cache directory to a writable location
+ENV UV_CACHE_DIR=/app/.cache/uv
 
 CMD ["uv", "run", "src/agent.py", "start"]
