@@ -194,9 +194,9 @@
   --color-button-secondary: var(--bgAccentPrimary);
   --color-button-secondary-foreground: var(--fgAccent);
 
-  --color-destructive: var(--bgSerious);
-  --color-destructive-hover: var(--bgSerious2);
-  --color-destructive-foreground: var(--fgSerious);
+  --color-destructive: #dc2626;
+  --color-destructive-hover: #b91c1c;
+  --color-destructive-foreground: #ffffff;
 }
 
 @layer base {

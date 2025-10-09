@@ -1,5 +1,5 @@
 import { Track } from 'livekit-client';
-import { AgentControlBar } from '@/components/livekit/agent-control-bar/agent-control-bar';
+import { BattleControlBar } from '@/components/livekit/agent-control-bar/battle-control-bar';
 import { DeviceSelect } from '@/components/livekit/device-select';
 import { TrackToggle } from '@/components/livekit/track-toggle';
 import { Container } from '../Container';
@@ -45,20 +45,13 @@ export default function LiveKit() {
         </div>
       </Container>
 
-      {/* Agent control bar */}
+      {/* Battle control bar */}
       <Container>
         <div className="flex items-center justify-between">
-          <h3 className="text-muted-foreground text-sm">A control bar component.</h3>
+          <h3 className="text-muted-foreground text-sm">A battle control bar component.</h3>
         </div>
         <div className="relative flex items-center justify-center">
-          <AgentControlBar
-            className="w-full"
-            capabilities={{
-              supportsChatInput: true,
-              supportsVideoInput: true,
-              supportsScreenShare: true,
-            }}
-          />
+          <BattleControlBar className="w-full" />
         </div>
       </Container>
     </>

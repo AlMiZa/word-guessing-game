@@ -6,41 +6,38 @@ COPY --from=ghcr.io/astral-sh/uv:0.9 /uv /uvx /bin/
 ENV PYTHONUNBUFFERED=1
 ENV UV_LINK_MODE=copy
 
+WORKDIR /app
+
 # Install build dependencies
-RUN apt-get update && apt-get install -y \
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
     python3-dev \
+  && apt-get autoremove -yqq --purge \
+  && apt-get clean \
   && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app
+# Install the project's dependencies using the lockfile and settings
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    uv sync --frozen --no-install-project --no-dev
 
-# Copy dependency files
-COPY pyproject.toml uv.lock ./
-
-# Create src directory to avoid uv failing
-RUN mkdir -p src/
-
-# Install dependencies
-RUN uv sync --locked
-
-# Development stage
-FROM base AS development
-
-WORKDIR /app
-
-# Install watchfiles for hot reload
-RUN uv pip install watchfiles
-
-# Copy source code
-COPY . .
+COPY entrypoint.sh /app/entrypoint.sh
 
 # Make entrypoint executable
 RUN chmod +x /app/entrypoint.sh
 
-# Use entrypoint to download models at runtime, then start with hot reload
 ENTRYPOINT ["/app/entrypoint.sh"]
-CMD ["uv", "run", "watchfiles", "--filter", "python", "uv run src/agent.py start", "src"]
+
+# Development stage
+FROM base AS development
+
+# Use entrypoint to download models at runtime, then start with hot reload
+CMD ["uv", "run", "--frozen", "python", "-m", "watchdog.watchmedo", "auto-restart", "--directory", "/app", "--patterns=*.py;*.yaml", "--recursive", "--no-restart-on-command-exit", "--debounce-interval", "0.2", "--", "python3", "src/agent.py", "start"]
+
+RUN uv sync --frozen --no-install-project --all-groups
 
 # Production stage
 FROM base AS production
@@ -55,8 +52,6 @@ RUN adduser \
     --uid "${UID}" \
     user
 
-WORKDIR /app
-
 # Copy source code
 COPY . .
 
@@ -66,6 +61,6 @@ RUN chmod +x /app/entrypoint.sh && \
 
 USER user
 
-# Use entrypoint to download models at runtime, then start the agent
-ENTRYPOINT ["/app/entrypoint.sh"]
+RUN uv sync --frozen --no-install-project --all-groups
+
 CMD ["uv", "run", "src/agent.py", "start"]

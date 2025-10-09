@@ -20,6 +20,7 @@ dev = [
     "pytest",
     "pytest-asyncio",
     "ruff",
+    "watchdog>=6.0.0",
 ]
 
 [tool.setuptools.packages.find]
