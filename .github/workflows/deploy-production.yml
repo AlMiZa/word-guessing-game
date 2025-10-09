@@ -40,7 +40,7 @@ jobs:
           build-services: ${{ matrix.services }}
           registry: ghcr.io
           registry-user: ${{ github.actor }}
-          registry-password: ${{ secrets.GITHUB_TOKEN }}
+          registry-password: ${{ secrets.CR_PAT }}
 
   # deploy:
   #   needs:
