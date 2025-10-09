@@ -34,7 +34,7 @@ services:
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY}
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET}
     volumes:
-      - agent-cache:/root/.cache
+      - agent-cache:/app/.cache
 
 volumes:
   nginx-certs:
