@@ -1,0 +1,70 @@
+---
+name: "Build Docker Services Images"
+description: |
+  Build docker images for services
+inputs:
+  env:
+    description: "Name which use as part of files, e.g. docker-compose.stage.yml"
+    required: true
+
+  build-services:
+    description: "docker-compose services which required to build"
+    required: true
+
+  registry:
+    description: "URL for docker container registry"
+    required: true
+
+  registry-user:
+    description: "Username for login to docker registry"
+    required: true
+
+  registry-password:
+    description: "Password for login to docker registry"
+    required: true
+
+  service-account-token-1password:
+    description: "1Password Service Account Token"
+    required: true
+
+  docker-tag:
+    description: "Docker tag"
+    required: false
+    default: ${{ github.sha }}
+
+  push-images:
+    description: "Is required to push images"
+    required: false
+    default: "true"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Prepare docker environment
+      uses: ./.github/actions/prepare-docker-env
+      with:
+        env: ${{ inputs.env }}
+        registry: ${{ inputs.registry }}
+        registry-user: ${{ inputs.registry-user }}
+        registry-password: ${{ inputs.registry-password }}
+
+    - name: Build images and store cache in Registry
+      env:
+        DOCKER_BUILDKIT: "1"
+      shell: bash
+      run: |
+          docker compose \
+          -f docker-compose.yml \
+          -f docker-compose.${{ inputs.env }}.yml \
+          config > docker-compose.final.yml
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build and push ${{ matrix.image }} image
+      uses: docker/bake-action@v6
+      with:
+        source: .
+        files: docker-compose.final.yml
+        push: true
+        targets: ${{ inputs.build-services }}

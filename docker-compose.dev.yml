@@ -1,0 +1,26 @@
+services:
+  web:
+    image: web:latest
+    build:
+      target: development
+    ports:
+      - 3000:3000
+    volumes:
+      - ./services/web:/app
+      - /app/node_modules
+      - /app/.next
+    env_file:
+      - .env
+    restart: unless-stopped
+
+  agent:
+    image: agent:latest
+    build:
+      target: development
+    volumes:
+      - ./services/agent:/app
+      - /app/.venv
+      - /root/.cache
+    env_file:
+      - .env
+    restart: unless-stopped

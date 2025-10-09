@@ -1,0 +1,76 @@
+name: Deploy production
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  build-service-images:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: "agent"
+            services: |
+              agent
+          - name: "web"
+            services: |
+              web
+    env:
+      ENV: production
+
+    name: Build & Push Images for ${{ matrix.name }}
+    steps:
+      - name: GitHub Runtime
+        uses: crazy-max/ghaction-github-runtime@v3.0.0
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build & Push Images
+        uses: ./.github/actions/build-service-images
+        with:
+          env: production
+          build-services: ${{ matrix.services }}
+          registry: ghcr.io
+          registry-user: ${{ github.actor }}
+          registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+  # deploy:
+  #   needs:
+  #     - build-service-images
+  #   name: Deploy
+  #   runs-on: ubuntu-latest
+  #   container: python:3.9-bullseye
+  #   steps:
+  #     - name: Checkout
+  #       uses: actions/checkout@v4
+  #
+  #     - name: Load Secrets from 1P
+  #       id: op-secrets
+  #       uses: 1password/load-secrets-action@v2
+  #       with:
+  #         export-env: false
+  #       env:
+  #         OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.SERVICE_ACCOUNT_TOKEN_1PASSWORD }}
+  #         SSH_PRIVATE_KEY: "op://ENV.production/SSH/private key"
+  #         SERVER_IP: "op://ENV.production/SERVER_MANAGER/website"
+  #
+  #     - name: Deploy repo
+  #       uses: ./.github/actions/deploy
+  #       with:
+  #         env: production
+  #         version: ${{ github.sha }}
+  #         server_ip: ${{ steps.op-secrets.outputs.SERVER_IP }}
+  #         server_user: root
+  #         project_path: /root/evy
+  #         service-account-token-1password: ${{ secrets.SERVICE_ACCOUNT_TOKEN_1PASSWORD }}
+  #         ssh_private_key: ${{ steps.op-secrets.outputs.SSH_PRIVATE_KEY }}
+  #         slack_incoming_webhook_url: ${{ secrets.SLACK_INCOMING_WEBHOOK_URL }}
+  #         slack_channel_id: ${{ secrets.SLACK_CHANNEL_ID }}
