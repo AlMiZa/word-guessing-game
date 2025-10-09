@@ -1,0 +1,138 @@
+---
+name: "Deploy repo"
+
+description: |
+  Deploys application to server using Docker Swarm
+
+inputs:
+  env:
+    description: "Environment name (e.g. production, staging)"
+    required: true
+
+  version:
+    description: "Docker image tag/version to deploy"
+    required: true
+
+  server_ip:
+    description: "Server IP address"
+    required: true
+
+  server_password:
+    description: "SSH password for server access"
+    required: true
+
+  server_user:
+    description: "SSH username"
+    required: false
+    default: "root"
+
+  server_port:
+    description: "SSH port"
+    required: false
+    default: "22"
+
+  project_path:
+    description: "Project path on server"
+    required: false
+    default: /root/app
+
+  stack_name:
+    description: "Docker stack name"
+    required: false
+    default: "voice-agent"
+
+  registry:
+    description: "Docker registry URL"
+    required: true
+
+  registry_username:
+    description: "Docker registry username"
+    required: true
+
+  registry_password:
+    description: "Docker registry password"
+    required: true
+
+  image_repository:
+    description: "Docker image repository"
+    required: true
+
+  livekit_url:
+    description: "LiveKit WebSocket URL"
+    required: true
+
+  livekit_api_key:
+    description: "LiveKit API key"
+    required: true
+
+  livekit_api_secret:
+    description: "LiveKit API secret"
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Create .env file
+      shell: bash
+      run: |
+        cat > .env << ENV_EOF
+        ENV_EOF
+
+    - name: Copy files to server
+      uses: appleboy/scp-action@v0.1.7
+      with:
+        host: ${{ inputs.server_ip }}
+        username: ${{ inputs.server_user }}
+        password: ${{ inputs.server_password }}
+        port: ${{ inputs.server_port }}
+        source: "docker-compose.yml,docker-compose.${{ inputs.env }}.yml"
+        target: ${{ inputs.project_path }}
+        strip_components: 0
+
+    - name: Deploy to server
+      uses: appleboy/ssh-action@v1.0.3
+      env:
+        ENV: ${{ inputs.env }}
+        PROJECT_PATH: ${{ inputs.project_path }}
+        STACK_NAME: ${{ inputs.stack_name }}
+        LIVEKIT_URL: ${{ inputs.livekit_url }}
+        LIVEKIT_API_KEY: ${{ inputs.livekit_api_key }}
+        LIVEKIT_API_SECRET: ${{ inputs.livekit_api_secret }}
+        IMAGE_REPOSITORY: ${{ inputs.image_repository }}
+        DOCKER_TAG: ${{ inputs.version }}
+      with:
+        host: ${{ inputs.server_ip }}
+        username: ${{ inputs.server_user }}
+        password: ${{ inputs.server_password }}
+        port: ${{ inputs.server_port }}
+        envs: ENV,PROJECT_PATH,STACK_NAME,LIVEKIT_URL,LIVEKIT_API_KEY,LIVEKIT_API_SECRET,IMAGE_REPOSITORY,DOCKER_TAG
+        script_stop: true
+        script: |
+          echo "########################################################################"
+          figlet "Run preliminary checks and setup"
+          echo "########################################################################"
+
+          cd ${PROJECT_PATH}
+          ls -la .
+
+          echo "########################################################################"
+          figlet "Deploy Stack"
+          echo "########################################################################"
+
+          docker stack deploy --with-registry-auth ${STACK_NAME} -c <( \
+            docker compose -f docker-compose.yml -f docker-compose.${ENV}.yml config \
+            | sed -E 's/published: "([0-9]+)"/published: \1/g' \
+            | sed -E 's/name:(.*)//g' \
+            | cat <(echo -e 'version: "3.8"') -)
+
+          echo "########################################################################"
+          figlet "Cleaning Docker"
+          echo "########################################################################"
+
+          # Remove old images (keep 30 newest)
+          docker rmi $(docker images --format "{{.ID}} {{.Repository}}:{{.Tag}}" | awk 'NR>30 {print $1}') 2>/dev/null || true
+
+          # Prune dangling images
+          docker system prune -f --filter "until=1h"
+
+          echo "Deployment completed successfully!"

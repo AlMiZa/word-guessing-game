@@ -5,8 +5,16 @@ services:
       target: production
     ports:
       - 80:3000
+    environment:
+      LIVEKIT_URL: ${LIVEKIT_URL}
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET}
 
   agent:
     image: ${IMAGE_REPOSITORY}/agent:${DOCKER_TAG:-latest}
     build:
       target: production
+    environment:
+      LIVEKIT_URL: ${LIVEKIT_URL}
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET}

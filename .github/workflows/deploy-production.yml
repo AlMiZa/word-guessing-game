@@ -42,35 +42,29 @@ jobs:
           registry-user: ${{ github.actor }}
           registry-password: ${{ secrets.CR_PAT }}
 
-  # deploy:
-  #   needs:
-  #     - build-service-images
-  #   name: Deploy
-  #   runs-on: ubuntu-latest
-  #   container: python:3.9-bullseye
-  #   steps:
-  #     - name: Checkout
-  #       uses: actions/checkout@v4
-  #
-  #     - name: Load Secrets from 1P
-  #       id: op-secrets
-  #       uses: 1password/load-secrets-action@v2
-  #       with:
-  #         export-env: false
-  #       env:
-  #         OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.SERVICE_ACCOUNT_TOKEN_1PASSWORD }}
-  #         SSH_PRIVATE_KEY: "op://ENV.production/SSH/private key"
-  #         SERVER_IP: "op://ENV.production/SERVER_MANAGER/website"
-  #
-  #     - name: Deploy repo
-  #       uses: ./.github/actions/deploy
-  #       with:
-  #         env: production
-  #         version: ${{ github.sha }}
-  #         server_ip: ${{ steps.op-secrets.outputs.SERVER_IP }}
-  #         server_user: root
-  #         project_path: /root/evy
-  #         service-account-token-1password: ${{ secrets.SERVICE_ACCOUNT_TOKEN_1PASSWORD }}
-  #         ssh_private_key: ${{ steps.op-secrets.outputs.SSH_PRIVATE_KEY }}
-  #         slack_incoming_webhook_url: ${{ secrets.SLACK_INCOMING_WEBHOOK_URL }}
-  #         slack_channel_id: ${{ secrets.SLACK_CHANNEL_ID }}
+  deploy:
+    needs:
+      - build-service-images
+    name: Deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy to Server
+        uses: ./.github/actions/deploy
+        with:
+          env: production
+          version: ${{ github.sha }}
+          server_ip: ${{ secrets.SERVER_IP }}
+          server_password: ${{ secrets.SERVER_PASSWORD }}
+          server_user: root
+          project_path: /root/app
+          stack_name: voice-agent
+          registry: ghcr.io
+          registry_username: ${{ github.actor }}
+          registry_password: ${{ secrets.CR_PAT }}
+          image_repository: ghcr.io/${{ github.repository }}
+          livekit_url: ${{ secrets.LIVEKIT_URL }}
+          livekit_api_key: ${{ secrets.LIVEKIT_API_KEY }}
+          livekit_api_secret: ${{ secrets.LIVEKIT_API_SECRET }}
