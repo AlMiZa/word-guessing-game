@@ -61,6 +61,4 @@ RUN chmod +x /app/entrypoint.sh && \
 
 USER user
 
-RUN uv sync --frozen --no-install-project --all-groups
-
 CMD ["uv", "run", "src/agent.py", "start"]
