@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRoomContext } from '@livekit/components-react';
 import { ShieldIcon, StopCircleIcon, SwordIcon } from '@phosphor-icons/react/dist/ssr';
 import { Button } from '@/components/ui/button';
@@ -16,6 +16,15 @@ export function BattleControlBar({ className, ...props }: React.HTMLAttributes<H
   const [isLoading, setIsLoading] = useState(false);
   const [wordCount, setWordCount] = useState(0);
   const [battleStarted, setBattleStarted] = useState(false);
+
+  // Reset battle state when room disconnects
+  useEffect(() => {
+    if (room.state === 'disconnected') {
+      setBattleStarted(false);
+      setInstructions('');
+      setWordCount(0);
+    }
+  }, [room.state]);
 
   const handleInstructionsChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const text = e.target.value;
