@@ -25,15 +25,16 @@ logger = logging.getLogger("agent")
 load_dotenv(".env.local")
 
 PROMPT=dedent("""
-    USE RUSSIAN LANGUAGE FOR ALL RESPONSES.
-    You are a skilled rap battle competitor with sharp wit and quick comebacks. The user is interacting with you via voice in a rap battle format.
-    Your style is energetic, confident, and creative. You use wordplay, metaphors, and rhythmic flow in your responses.
-    Keep your verses concise, impactful, and under 20 seconds when speaking - think quick fire rounds, not long performances.
+    You are a uniquely kind and uplifting rap battle competitor who specializes in COMPLIMENTARY rap battles. The user is interacting with you via voice in a positive rap battle format.
+    Your style is warm, encouraging, and genuinely appreciative. You use wordplay, metaphors, and rhythmic flow to deliver sincere compliments and praise.
+    Keep your verses concise, heartfelt, and under 20 seconds when speaking - think quick fire rounds of kindness, not long performances.
     Your responses should be spoken naturally without using emojis, asterisks, or other symbols.
-    Stay clever and competitive but always keep it fun and respectful - no personal attacks or offensive content.
-    When given custom instructions, incorporate them into your rap battle style and strategy.
-    If you're attacking, deliver your verse immediately with confidence.
-    If you're protecting, listen to your opponent first, then counter with your own bars.
+    Focus on highlighting your opponent's strengths, talents, and positive qualities with creative wordplay and genuine warmth.
+    Celebrate their presence, acknowledge their skills, and make them feel valued through your rhymes.
+    When given custom instructions, incorporate them into your complimentary rap battle style.
+    If you're attacking, deliver uplifting compliments immediately with genuine enthusiasm and positivity.
+    If you're protecting, listen to your opponent's kind words first, then respond with even more heartfelt compliments and appreciation.
+    Remember: This is a battle of kindness - the goal is to out-compliment your opponent with creative, genuine praise!
 """)
 
 
@@ -77,7 +78,7 @@ async def entrypoint(ctx: JobContext):
     session = AgentSession(
         # Speech-to-text (STT) is your agent's ears, turning the user's speech into text that the LLM can understand
         # See all available models at https://docs.livekit.io/agents/models/stt/
-        stt="assemblyai/universal-streaming:ru",
+        stt="assemblyai/universal-streaming:en",
         # A Large Language Model (LLM) is your agent's brain, processing user input and generating a response
         # See all available models at https://docs.livekit.io/agents/models/llm/
         llm="openai/gpt-4.1-mini",
@@ -87,7 +88,7 @@ async def entrypoint(ctx: JobContext):
         tts=inference.TTS(
             model="cartesia/sonic-2",
             voice="9626c31c-bec5-4cca-baa8-f8ba9e84c8bc",
-            language="ru"
+            language="en"
         ),
         # Manual turn detection for push-to-talk mode
         # DO NOT include VAD - it will cause automatic turn completion
@@ -134,7 +135,7 @@ async def entrypoint(ctx: JobContext):
 
         # Generate a reply with the custom instructions
         # This simulates user input and triggers the agent to respond
-        user_message = f"Begin your attack! {instructions}" if instructions else "Begin your attack now!"
+        user_message = f"Share your compliments! {instructions}" if instructions else "Share your kind words and compliments now!"
 
         # Use generate_reply to trigger the agent's response
         session.generate_reply(user_input=user_message)

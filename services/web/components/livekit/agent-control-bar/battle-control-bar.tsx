@@ -119,14 +119,14 @@ export function BattleControlBar({ className, ...props }: React.HTMLAttributes<H
       {!battleStarted && (
         <div className="flex flex-col gap-2">
           <label htmlFor="instructions" className="text-fg1 text-sm font-medium">
-            Battle Instructions (max 20 words)
+            Compliment Instructions (max 20 words)
           </label>
           <input
             id="instructions"
             type="text"
             value={instructions}
             onChange={handleInstructionsChange}
-            placeholder="Enter your battle instructions..."
+            placeholder="Enter your compliment style or theme..."
             className="border-bg2 dark:border-separator1 bg-background focus:ring-primary w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-none"
           />
           <p className="text-fg2 text-right text-xs">{wordCount} / 20 words</p>
@@ -145,7 +145,7 @@ export function BattleControlBar({ className, ...props }: React.HTMLAttributes<H
               className="flex-1 font-mono md:h-10"
             >
               <SwordIcon weight="bold" className="mr-2" />
-              ATTACK
+              COMPLIMENT
             </Button>
 
             <Button
@@ -156,7 +156,7 @@ export function BattleControlBar({ className, ...props }: React.HTMLAttributes<H
               className="flex-1 font-mono md:h-10"
             >
               <ShieldIcon weight="bold" className="mr-2" />
-              PROTECT
+              RESPOND
             </Button>
           </>
         )}

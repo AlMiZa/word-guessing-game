@@ -35,16 +35,16 @@ export const Welcome = ({
       </svg>
 
       <h1 className="mb-4 text-4xl font-bold">
-        Welcome to <br /> AI Rap Battle!
+        Welcome to <br /> AI Compliment Battle!
       </h1>
 
       <p className="text-fg1 p2-1 font-large max-w-prose leading-12">
-        Step up to the mic and battle your AI opponent
+        Step up to the mic and spread kindness with your AI partner
       </p>
 
       <div className="mt-6 flex flex-col gap-3">
         <Button variant="destructive" size="xl" onClick={onStartBattle} className="w-64 font-mono">
-          START BATTLE
+          START COMPLIMENTING
         </Button>
       </div>
     </section>

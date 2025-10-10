@@ -73,7 +73,7 @@ export const BattleSessionView = ({
 
       {/* Battle Title */}
       <div className="fixed top-0 right-0 left-0 z-30 flex items-center justify-center pt-8">
-        <h1 className="text-fg1 text-2xl font-bold md:text-4xl">Battle Mode</h1>
+        <h1 className="text-fg1 text-2xl font-bold md:text-4xl">Complimentary Battle Mode</h1>
       </div>
 
       <MediaTiles chatOpen={false} />
