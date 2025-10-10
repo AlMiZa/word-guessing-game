@@ -156,5 +156,9 @@ Check the deployment status in the **Actions** tab of your GitHub repository. Th
 The production deployment uses:
 - **Docker Swarm** for orchestration
 - **GitHub Container Registry** for image storage
-- **Nginx** as reverse proxy with SSL support
+- **Nginx** as reverse proxy with self-signed SSL support
 - Separate environment configurations for each service
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
