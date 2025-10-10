@@ -34,8 +34,6 @@ The application consists of three main services:
 
 - Docker and Docker Compose
 - LiveKit account and credentials ([Get started](https://livekit.io))
-- API keys for:
-  - LiveKit API (required)
 
 ## Getting Started
 
