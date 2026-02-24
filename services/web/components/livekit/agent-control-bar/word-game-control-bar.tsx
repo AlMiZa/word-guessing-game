@@ -14,6 +14,7 @@ const LANGUAGES = [
     { value: 'French', label: 'French' },
     { value: 'Italian', label: 'Italian' },
     { value: 'German', label: 'German' },
+    { value: 'Belarusian', label: 'Belarusian' },
 ];
 
 /**

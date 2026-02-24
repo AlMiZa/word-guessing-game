@@ -121,6 +121,24 @@ class SupabaseWordService:
                 WordPair(id="4", english_word="water", translated_word="agua", target_language="Spanish"),
                 WordPair(id="5", english_word="hello", translated_word="hola", target_language="Spanish"),
             ]
+        elif target_language.lower() in ["belarusian", "be", "belarus"]:
+            return [
+                WordPair(id="1", english_word="dog", translated_word="сабака", target_language="Belarusian"),
+                WordPair(id="2", english_word="cat", translated_word="кот", target_language="Belarusian"),
+                WordPair(id="3", english_word="house", translated_word="дом", target_language="Belarusian"),
+                WordPair(id="4", english_word="water", translated_word="вода", target_language="Belarusian"),
+                WordPair(id="5", english_word="hello", translated_word="прывітанне", target_language="Belarusian"),
+                WordPair(id="6", english_word="goodbye", translated_word="да пабачэння", target_language="Belarusian"),
+                WordPair(id="7", english_word="thank you", translated_word="дзякуй", target_language="Belarusian"),
+                WordPair(id="8", english_word="please", translated_word="калі ласка", target_language="Belarusian"),
+                WordPair(id="9", english_word="yes", translated_word="так", target_language="Belarusian"),
+                WordPair(id="10", english_word="no", translated_word="не", target_language="Belarusian"),
+                WordPair(id="11", english_word="friend", translated_word="сябар", target_language="Belarusian"),
+                WordPair(id="12", english_word="love", translated_word="любов", target_language="Belarusian"),
+                WordPair(id="13", english_word="book", translated_word="кніга", target_language="Belarusian"),
+                WordPair(id="14", english_word="sun", translated_word="сонца", target_language="Belarusian"),
+                WordPair(id="15", english_word="moon", translated_word="месяц", target_language="Belarusian"),
+            ]
         else:
             logger.warning(f"No fallback words available for {target_language}")
             return []
