@@ -20,6 +20,8 @@ from livekit.plugins import noise_cancellation, silero
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
 from textwrap import dedent
 
+from word_game_agent import WordGameAgent, create_word_game_agent
+
 logger = logging.getLogger("agent")
 
 load_dotenv(".env.local")
@@ -74,7 +76,7 @@ async def entrypoint(ctx: JobContext):
         "room": ctx.room.name,
     }
 
-    # Set up a voice AI pipeline with manual turn detection (push-to-talk)
+    # Set up a voice AI pipeline with VAD for word game
     session = AgentSession(
         # Speech-to-text (STT) is your agent's ears, turning the user's speech into text that the LLM can understand
         # See all available models at https://docs.livekit.io/agents/models/stt/
@@ -84,15 +86,13 @@ async def entrypoint(ctx: JobContext):
         llm="openai/gpt-4.1-mini",
         # Text-to-speech (TTS) is your agent's voice, turning the LLM's text into speech that the user can hear
         # See all available models as well as voice selections at https://docs.livekit.io/agents/models/tts/
-        # tts="cartesia/sonic-2:9626c31c-bec5-4cca-baa8-f8ba9e84c8bc",
         tts=inference.TTS(
             model="cartesia/sonic-2",
             voice="9626c31c-bec5-4cca-baa8-f8ba9e84c8bc",
             language="en"
         ),
-        # Manual turn detection for push-to-talk mode
-        # DO NOT include VAD - it will cause automatic turn completion
-        turn_detection="manual",
+        # Use VAD for automatic turn detection in word game mode
+        turn_detection="auto",
     )
 
     # Set up RoomIO for managing participant audio
@@ -114,60 +114,41 @@ async def entrypoint(ctx: JobContext):
 
     ctx.add_shutdown_callback(log_usage)
 
-    # Create the assistant instance so we can modify it later
-    assistant = Assistant()
+    # Create the word game agent instance
+    word_game_agent = create_word_game_agent(target_language="Portuguese")
 
     # Start the session
-    await session.start(agent=assistant)
+    await session.start(agent=word_game_agent)
 
-    # Disable input audio at the start (push-to-talk mode)
-    session.input.set_audio_enabled(False)
+    # Enable input audio for word game (VAD mode)
+    session.input.set_audio_enabled(True)
 
-    # Store VAD instance for protect mode
-    vad = None
+    @ctx.room.local_participant.register_rpc_method("start_game")
+    async def start_game(data: rtc.RpcInvocationData):
+        logger.info(f"start_game called by {data.caller_identity} with language: {data.payload}")
 
-    @ctx.room.local_participant.register_rpc_method("attack")
-    async def attack(data: rtc.RpcInvocationData):
-        logger.info(f"attack called by {data.caller_identity} with instructions: {data.payload}")
+        # Get the target language from payload
+        target_language = data.payload or "Portuguese"
 
-        # Get custom instructions if provided
-        instructions = data.payload or ""
+        # Start the game and get the greeting message
+        greeting = word_game_agent.start_game(target_language)
 
-        # Generate a reply with the custom instructions
-        # This simulates user input and triggers the agent to respond
-        user_message = f"Share your compliments! {instructions}" if instructions else "Share your kind words and compliments now!"
+        # Say the greeting to start the game
+        session.generate_reply(user_input=f"START_GAME:{target_language}")
 
-        # Use generate_reply to trigger the agent's response
-        session.generate_reply(user_input=user_message)
+        logger.info(f"Word game started for {target_language}")
 
-    @ctx.room.local_participant.register_rpc_method("protect")
-    async def protect(data: rtc.RpcInvocationData):
-        nonlocal vad
-        logger.info(f"protect called by {data.caller_identity} with instructions: {data.payload}")
+    @ctx.room.local_participant.register_rpc_method("stop_game")
+    async def stop_game(data: rtc.RpcInvocationData):
+        logger.info(f"stop_game called by {data.caller_identity}")
 
-        # Get custom instructions if provided
-        instructions = data.payload or ""
+        # Reset the game state
+        word_game_agent.game_state.reset()
 
-        # Store the protect instructions in the assistant to be used when the turn is completed
-        if instructions:
-            assistant.protect_instructions = instructions
-            logger.info(f"Stored protect instructions: {instructions}")
+        # Say goodbye
+        session.generate_reply(user_input="Thanks for practicing! Goodbye!")
 
-        # Switch to automatic turn detection with VAD for protect mode
-        # This allows the agent to automatically respond after 5 seconds of silence
-        if vad is None:
-            vad = ctx.proc.userdata["vad"]
-
-        # Update the session to use VAD with 5-second silence threshold
-        session.input.turn_detector = vad
-        # Set min_endpointing_delay to 3 seconds (3000ms)
-        session.input.min_endpointing_delay = 3.0
-
-        # Start listening for the attacker
-        room_io.set_participant(data.caller_identity)
-        session.input.set_audio_enabled(True)
-
-        logger.info("Protect mode: VAD enabled with 3-second silence threshold")
+        logger.info("Word game stopped")
 
     # Join the room and connect to the user
     await ctx.connect()
@@ -175,9 +156,8 @@ async def entrypoint(ctx: JobContext):
 
 async def handle_request(request: JobRequest) -> None:
     await request.accept(
-        identity="ptt-agent",
-        # this attribute communicates to frontend that we support PTT
-        attributes={"push-to-talk": "1"},
+        identity="word-game-agent",
+        attributes={"mode": "word-game"},
     )
 
 if __name__ == "__main__":
