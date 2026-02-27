@@ -5,6 +5,8 @@ services:
       dockerfile: Dockerfile
     env_file:
       - .env
+    ports:
+      - "3000:3000"
     healthcheck:
       test: "curl http://localhost:3000/ || exit 1"
       interval: 5s
