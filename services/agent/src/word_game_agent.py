@@ -7,6 +7,7 @@ The agent speaks English words and the player responds by saying the translation
 
 import logging
 import random
+import json
 from typing import Optional
 from dataclasses import dataclass, field
 
@@ -15,6 +16,9 @@ from livekit.agents.llm import ChatContext, ChatMessage
 from textwrap import dedent
 
 from supabase_client import SupabaseWordService, WordPair
+
+# Data channel payload for sending score updates to frontend
+SCORE_DATA_CHANNEL = "word_game_score"
 
 logger = logging.getLogger("agent")
 
@@ -91,7 +95,8 @@ class WordGameAgent(Agent):
     def __init__(
         self,
         target_language: str = "Portuguese",
-        word_service: Optional[SupabaseWordService] = None
+        word_service: Optional[SupabaseWordService] = None,
+        room=None
     ) -> None:
         """
         Initialize the WordGameAgent.
@@ -99,12 +104,14 @@ class WordGameAgent(Agent):
         Args:
             target_language: The target language for translations (default: "Portuguese")
             word_service: Optional SupabaseWordService for fetching words
+            room: Optional LiveKit room reference for sending data messages
         """
         super().__init__(instructions=WORD_GAME_PROMPT)
         self.target_language = target_language
         self.word_service = word_service or SupabaseWordService()
         self.game_state = GameState()
         self.word_pairs: list[WordPair] = []
+        self.room = room  # Store room reference for sending data messages
 
         # Load word pairs on initialization
         self._load_word_pairs()
@@ -116,6 +123,35 @@ class WordGameAgent(Agent):
             limit=100
         )
         logger.info(f"Loaded {len(self.word_pairs)} word pairs for {self.target_language}")
+
+    def _send_score_update(self) -> None:
+        """Send the current score to the frontend via data channel."""
+        if self.room:
+            try:
+                import asyncio
+                from livekit import rtc
+
+                # Send score as JSON data
+                score_data = {
+                    "type": "score_update",
+                    "score": self.game_state.score,
+                    "total": self.game_state.total_words,
+                }
+                payload = json.dumps(score_data).encode('utf-8')
+
+                # Send to all participants
+                async def publish():
+                    for participant in self.room.remote_participants.values():
+                        await self.room.local_participant.publish_data(
+                            payload,
+                            identity=participant.identity
+                        )
+
+                # Run async
+                asyncio.create_task(publish())
+                logger.info(f"Sent score update: {score_data}")
+            except Exception as e:
+                logger.warning(f"Failed to send score update: {e}")
 
     def start_game(self, target_language: Optional[str] = None) -> str:
         """
@@ -195,8 +231,6 @@ class WordGameAgent(Agent):
         if not current_word:
             return False, "Let me think of a word for you..."
 
-        self.game_state.total_words += 1
-
         # Normalize answers for comparison (lowercase, trim)
         # This ensures case-insensitive matching and removes extra whitespace
         user_normalized = user_answer.lower().strip()
@@ -207,8 +241,12 @@ class WordGameAgent(Agent):
 
         if is_correct:
             self.game_state.score += 1
+            self.game_state.total_words += 1
             accuracy = self.game_state.get_accuracy()
             next_word = self._get_next_word()
+
+            # Send score update to frontend
+            self._send_score_update()
 
             response = (
                 f"That's correct! '{current_word.english_word}' in {self.target_language} "
@@ -230,12 +268,17 @@ class WordGameAgent(Agent):
             return True, response
         else:
             # Incorrect answer
+            self.game_state.total_words += 1
             next_word = self._get_next_word()
+
+            # Send score update to frontend
+            self._send_score_update()
 
             response = (
                 f"Not quite! '{current_word.english_word}' in {self.target_language} "
                 f"is '{current_word.translated_word}'. "
                 f"Don't worry, you'll get it next time! "
+                f"Your score is {self.game_state.score} out of {self.game_state.total_words}. "
                 f"Let's try another one. How do you say '{next_word.english_word}' in {self.target_language}?"
             )
 
@@ -249,7 +292,9 @@ class WordGameAgent(Agent):
         This implements fuzzy matching to handle common speech patterns:
         - Articles before words (e.g., "el gato" vs "gato")
         - Prepositions (e.g., "the cat" vs "cat")
-        - Accented characters are handled by normalization
+        - Multiple word answers (e.g., "thank you" -> "obrigado")
+        - Partial matches with Soundex-like similarity
+        - Accented characters normalization
 
         Args:
             user_answer: Normalized user answer (lowercase, trimmed)
@@ -262,20 +307,128 @@ class WordGameAgent(Agent):
         if user_answer == correct_answer:
             return True
 
+        # Remove common filler words and phrases that STT might add
+        user_answer = self._remove_filler_words(user_answer)
+
+        # Check again after removing filler words
+        if user_answer == correct_answer:
+            return True
+
         # For single-word answers, check if user said the word at the end
         # This handles cases where user might say "the cat" instead of "cat"
         # or include filler words before the actual answer
         if len(correct_answer.split()) == 1 and user_answer.endswith(correct_answer):
             return True
 
+        # For multi-word answers, check if the correct answer appears in user's speech
+        if len(correct_answer.split()) > 1:
+            # Check if user said all the words of the correct answer in order
+            correct_words = correct_answer.split()
+            user_words = user_answer.split()
+
+            # Check if correct words appear consecutively in user answer
+            for i in range(len(user_words) - len(correct_words) + 1):
+                if user_words[i:i+len(correct_words)] == correct_words:
+                    return True
+
         # Check if user said a common article before the word
-        # Supports Romance languages: Spanish, Portuguese, French, Italian
-        articles = ["el ", "la ", "le ", "les ", "il ", "lo ", "o ", "a ", "os ", "as "]
+        # Supports Romance languages and Germanic languages
+        articles = [
+            "el ", "la ", "le ", "les ", "il ", "lo ", "o ", "a ", "os ", "as ",
+            "un ", "une ", "der ", "die ", "das ", "ein ", "eine ", "і ", "ў "
+        ]
         for article in articles:
             if user_answer == article + correct_answer:
                 return True
+            if user_answer == correct_answer.replace(" ", " " + article):
+                return True
+
+        # Check for partial match - if user got at least 70% of the characters right
+        # This helps with pronunciation variations and STT errors
+        if self._is_similar_enough(user_answer, correct_answer):
+            return True
 
         return False
+
+    def _remove_filler_words(self, text: str) -> str:
+        """Remove common filler words that STT might include."""
+        filler_words = [
+            "the ", "a ", "an ", "is ", "it ", "it's ", "its ",
+            "um ", "uh ", "eh ", "oh ", "like ", "so ",
+            "isto é ", "é ", "o ", "a ", "os ", "as ",  # Portuguese
+            "el ", "la ", "los ", "las ", "un ", "una ",  # Spanish
+            "le ", "la ", "les ", "un ", "une ", "des ",  # French
+            "il ", "lo ", "la ", "le ", "gli ", "un ", "uno ", "una ",  # Italian
+            "der ", "die ", "das ", "ein ", "eine ",  # German
+        ]
+
+        result = text.lower()
+        for filler in filler_words:
+            # Only remove if at the start to avoid over-removing
+            if result.startswith(filler):
+                result = result[len(filler):]
+                break
+
+        return result.strip()
+
+    def _is_similar_enough(self, answer1: str, answer2: str, threshold: float = 0.7) -> bool:
+        """
+        Check if two strings are similar enough using Levenshtein distance ratio.
+
+        Args:
+            answer1: First string to compare
+            answer2: Second string to compare
+            threshold: Minimum similarity ratio (0-1) to consider a match
+
+        Returns:
+            True if strings are similar enough
+        """
+        if not answer1 or not answer2:
+            return False
+
+        # For very short words, require exact match or very high similarity
+        if len(answer1) <= 3 or len(answer2) <= 3:
+            return answer1 == answer2
+
+        # Calculate Levenshtein distance
+        import unicodedata
+
+        # Normalize unicode characters (handles accents)
+        def normalize(s):
+            return ''.join(
+                c for c in unicodedata.normalize('NFD', s)
+                if unicodedata.category(c) != 'Mn'
+            )
+
+        answer1_norm = normalize(answer1.lower())
+        answer2_norm = normalize(answer2.lower())
+
+        # Simple Levenshtein distance calculation
+        m, n = len(answer1_norm), len(answer2_norm)
+
+        # Quick check for very different lengths
+        if abs(m - n) > max(m, n) * 0.5:
+            return False
+
+        # Use dynamic programming for distance calculation
+        dp = [[0] * (n + 1) for _ in range(m + 1)]
+
+        for i in range(m + 1):
+            dp[i][0] = i
+        for j in range(n + 1):
+            dp[0][j] = j
+
+        for i in range(1, m + 1):
+            for j in range(1, n + 1):
+                if answer1_norm[i-1] == answer2_norm[j-1]:
+                    dp[i][j] = dp[i-1][j-1]
+                else:
+                    dp[i][j] = 1 + min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1])
+
+        max_len = max(m, n)
+        similarity = 1 - (dp[m][n] / max_len)
+
+        return similarity >= threshold
 
     async def on_user_turn_completed(
         self,
@@ -304,8 +457,11 @@ class WordGameAgent(Agent):
         Raises:
             StopResponse: If user turn is empty, prevents agent from responding
         """
+        logger.info(f"on_user_turn_completed called: game_active={self.game_state.is_active}, text_content={new_message.text_content}")
+
         if not self.game_state.is_active:
             # Game not started, let the LLM handle it (for general conversation)
+            logger.info("Game not active, letting LLM handle the response")
             return
 
         if not new_message.text_content:
@@ -325,12 +481,13 @@ class WordGameAgent(Agent):
         logger.info(f"Evaluated answer: {user_answer} -> {is_correct}")
 
 
-def create_word_game_agent(target_language: str = "Portuguese") -> WordGameAgent:
+def create_word_game_agent(target_language: str = "Portuguese", room=None) -> WordGameAgent:
     """
     Factory function to create a WordGameAgent.
 
     Args:
         target_language: The target language for the game
+        room: Optional LiveKit room reference for sending data messages
 
     Returns:
         A configured WordGameAgent instance
@@ -338,5 +495,6 @@ def create_word_game_agent(target_language: str = "Portuguese") -> WordGameAgent
     word_service = SupabaseWordService()
     return WordGameAgent(
         target_language=target_language,
-        word_service=word_service
+        word_service=word_service,
+        room=room
     )

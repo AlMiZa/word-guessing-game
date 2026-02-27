@@ -3,13 +3,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Room, RoomEvent } from 'livekit-client';
 import { motion } from 'motion/react';
-import { RoomAudioRenderer, RoomContext, StartAudio } from '@livekit/components-react';
+import { RoomAudioRenderer, RoomContext, useVoiceAssistant } from '@livekit/components-react';
 import { toastAlert } from '@/components/alert-toast';
 import { WordGameSessionView } from '@/components/word-game-session-view';
 import { WordGameWelcome } from '@/components/word-game-welcome';
 import { Toaster } from '@/components/ui/sonner';
 import useConnectionDetails from '@/hooks/useConnectionDetails';
 import type { AppConfig } from '@/lib/types';
+import { SpeakerHigh } from '@phosphor-icons/react/dist/ssr';
 
 const MotionWordGameWelcome = motion.create(WordGameWelcome);
 const MotionWordGameSessionView = motion.create(WordGameSessionView);
@@ -21,8 +22,16 @@ interface WordGameAppProps {
 export function WordGameApp({ appConfig }: WordGameAppProps) {
     const room = useMemo(() => new Room(), []);
     const [sessionStarted, setSessionStarted] = useState(false);
+    const [audioStarted, setAudioStarted] = useState(false);
     const { refreshConnectionDetails, existingOrRefreshConnectionDetails } =
         useConnectionDetails(appConfig);
+
+    // Custom function to start audio
+    const startAudio = () => {
+        // Set audio as started - the user interaction (click) satisfies browser autoplay policy
+        // The RoomAudioRenderer will handle the actual audio playback
+        setAudioStarted(true);
+    };
 
     useEffect(() => {
         const onDisconnected = () => {
@@ -74,7 +83,10 @@ export function WordGameApp({ appConfig }: WordGameAppProps) {
         <main>
             <MotionWordGameWelcome
                 key="word-game-welcome"
-                onStartGame={() => setSessionStarted(true)}
+                onStartGame={() => {
+                    setSessionStarted(true);
+                    startAudio();
+                }}
                 disabled={sessionStarted}
                 initial={{ opacity: 1 }}
                 animate={{ opacity: sessionStarted ? 0 : 1 }}
@@ -84,7 +96,16 @@ export function WordGameApp({ appConfig }: WordGameAppProps) {
             <RoomContext.Provider value={room}>
                 <RoomAudioRenderer />
 
-                <StartAudio label="Start Audio" />
+                {/* Audio start button - shown only if audio hasn't been started */}
+                {!audioStarted && sessionStarted && (
+                    <button
+                        onClick={startAudio}
+                        className="fixed bottom-4 right-4 z-[100] flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-lg hover:bg-primary-hover md:bottom-12 md:right-12"
+                    >
+                        <SpeakerHigh weight="fill" className="size-4" />
+                        Enable Audio
+                    </button>
+                )}
 
                 <MotionWordGameSessionView
                     key="word-game-session-view"

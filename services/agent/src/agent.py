@@ -3,7 +3,6 @@ import logging
 from dotenv import load_dotenv
 from livekit import rtc
 from livekit.agents import (
-    Agent,
     AgentSession,
     JobContext,
     JobProcess,
@@ -15,56 +14,13 @@ from livekit.agents import (
     metrics,
     inference,
 )
-from livekit.agents.llm import ChatContext, ChatMessage, StopResponse
-from livekit.plugins import noise_cancellation, silero
-from livekit.plugins.turn_detector.multilingual import MultilingualModel
-from textwrap import dedent
+from livekit.plugins import silero
 
 from word_game_agent import WordGameAgent, create_word_game_agent
 
 logger = logging.getLogger("agent")
 
 load_dotenv(".env.local")
-
-PROMPT=dedent("""
-    You are a uniquely kind and uplifting rap battle competitor who specializes in COMPLIMENTARY rap battles. The user is interacting with you via voice in a positive rap battle format.
-    Your style is warm, encouraging, and genuinely appreciative. You use wordplay, metaphors, and rhythmic flow to deliver sincere compliments and praise.
-    Keep your verses concise, heartfelt, and under 20 seconds when speaking - think quick fire rounds of kindness, not long performances.
-    Your responses should be spoken naturally without using emojis, asterisks, or other symbols.
-    Focus on highlighting your opponent's strengths, talents, and positive qualities with creative wordplay and genuine warmth.
-    Celebrate their presence, acknowledge their skills, and make them feel valued through your rhymes.
-    When given custom instructions, incorporate them into your complimentary rap battle style.
-    If you're attacking, deliver uplifting compliments immediately with genuine enthusiasm and positivity.
-    If you're protecting, listen to your opponent's kind words first, then respond with even more heartfelt compliments and appreciation.
-    Remember: This is a battle of kindness - the goal is to out-compliment your opponent with creative, genuine praise!
-""")
-
-
-class Assistant(Agent):
-    def __init__(self, custom_instructions: str = "", protect_instructions: str = "") -> None:
-        # Use custom instructions if provided, otherwise use default prompt
-        instructions = custom_instructions if custom_instructions else PROMPT
-        super().__init__(instructions=instructions)
-        self.protect_instructions = protect_instructions
-
-    async def on_user_turn_completed(self, turn_ctx: ChatContext, new_message: ChatMessage) -> None:
-        # callback before generating a reply after user turn committed
-        # If we have protect instructions, prepend them to the user's message
-        if self.protect_instructions:
-            logger.info(f"Applying protect instructions: {self.protect_instructions}")
-            # Modify the user message to include defensive strategy
-            original_text = new_message.text_content or ""
-            enhanced_text = f"[Defensive Strategy: {self.protect_instructions}] User said: {original_text}"
-            # Update the message content
-            new_message.content = enhanced_text
-            logger.info(f"Enhanced user message with protect instructions")
-            # Clear the protect instructions after use
-            self.protect_instructions = ""
-
-        if not new_message.text_content:
-            # for example, raise StopResponse to stop the agent from generating a reply
-            logger.info("ignore empty user turn")
-            raise StopResponse()
 
 def prewarm(proc: JobProcess):
     proc.userdata["vad"] = silero.VAD.load()
@@ -77,10 +33,11 @@ async def entrypoint(ctx: JobContext):
     }
 
     # Set up a voice AI pipeline with VAD for word game
+    # Using Deepgram Nova-2 for multilingual speech recognition
     session = AgentSession(
-        # Speech-to-text (STT) is your agent's ears, turning the user's speech into text that the LLM can understand
+        # Speech-to-text (STT) - Deepgram Nova-2 supports multilingual input
         # See all available models at https://docs.livekit.io/agents/models/stt/
-        stt="assemblyai/universal-streaming:en",
+        stt="deepgram/nova-2",
         # A Large Language Model (LLM) is your agent's brain, processing user input and generating a response
         # See all available models at https://docs.livekit.io/agents/models/llm/
         llm="openai/gpt-4.1-mini",
@@ -114,14 +71,16 @@ async def entrypoint(ctx: JobContext):
 
     ctx.add_shutdown_callback(log_usage)
 
-    # Create the word game agent instance
-    word_game_agent = create_word_game_agent(target_language="Portuguese")
+    # Create the word game agent instance with room reference
+    # Pass room so agent can send score updates via data channel
+    word_game_agent = create_word_game_agent(target_language="Portuguese", room=ctx.room)
+
+    # Enable input audio BEFORE starting session
+    # This ensures the agent can hear the user from the beginning
+    session.input.set_audio_enabled(True)
 
     # Start the session
     await session.start(agent=word_game_agent)
-
-    # Enable input audio for word game (VAD mode)
-    session.input.set_audio_enabled(True)
 
     @ctx.room.local_participant.register_rpc_method("start_game")
     async def start_game(data: rtc.RpcInvocationData):
@@ -149,6 +108,28 @@ async def entrypoint(ctx: JobContext):
         session.generate_reply(user_input="Thanks for practicing! Goodbye!")
 
         logger.info("Word game stopped")
+
+    @ctx.room.local_participant.register_rpc_method("skip_question")
+    async def skip_question(data: rtc.RpcInvocationData):
+        logger.info(f"skip_question called by {data.caller_identity}")
+
+        # Move to the next word without incrementing score (user must answer correctly)
+        if word_game_agent.game_state.current_word:
+            word_game_agent.game_state.total_words += 1
+            logger.info(f"Skipped to next question. Score: {word_game_agent.game_state.score}/{word_game_agent.game_state.total_words}")
+
+        # Move to the next word and generate the response
+        next_word = word_game_agent._get_next_word()
+        response = (
+            f"Let's move to the next word. "
+            f"Your score is {word_game_agent.game_state.score} out of {word_game_agent.game_state.total_words}. "
+            f"How do you say '{next_word.english_word}' in {word_game_agent.target_language}?"
+        )
+
+        # Say the next question
+        session.generate_reply(user_input=f"SKIP_QUESTION:{response}")
+
+        logger.info("Skipped to next question")
 
     # Join the room and connect to the user
     await ctx.connect()

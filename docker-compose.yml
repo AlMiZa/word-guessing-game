@@ -3,6 +3,8 @@ services:
     build:
       context: ./services/web
       dockerfile: Dockerfile
+    env_file:
+      - .env
     healthcheck:
       test: "curl http://localhost:3000/ || exit 1"
       interval: 5s
@@ -13,3 +15,5 @@ services:
     build:
       context: ./services/agent
       dockerfile: Dockerfile
+    env_file:
+      - .env
